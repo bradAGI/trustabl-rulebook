@@ -49,14 +49,15 @@ without regenerating the index fails the build.
 
 ## `check_rulebook.py` — consistency gate
 
-Cross-checks the shipped detection rules (the `trustabl-rules` pack) against the
-rulebook's rationale docs. It is the rulebook analog of the engine's
+Cross-checks the shipped detection rules (the `agent-reliability-rules` pack)
+against the rulebook's rationale docs. It is the rulebook analog of the engine's
 `TestPolicyRules_AllRulesCovered` guard: it fails when the book drifts from the
 rules users actually receive, so a polished PDF can never quietly go stale.
 
 ### What it enforces
 
-1. **Coverage** — every rule in `trustabl-rules` has a rationale doc covering it.
+1. **Coverage** — every rule in `agent-reliability-rules` has a rationale doc
+   covering it.
 2. **Consistency** — each doc's front-matter `severity` / `confidence` / `scope`
    matches the rule's YAML.
 3. **Placement** — a rule is documented in the chapter (`category`/`topic`) where
@@ -89,6 +90,6 @@ to `--strict` to make missing front-matter a hard failure.
 The gate runs automatically via [`.github/workflows/rulebook.yml`](../.github/workflows/rulebook.yml):
 a `consistency` job (this gate `--strict`, `gen_index.py --check`, and a book
 assemble smoke test) gates every PR, and a `build-pdf` job renders and uploads the
-PDF artifact. The workflow checks out `trustabl-rules` into `.rules` and passes
-`--rules-repo .rules`. If `trustabl-rules` is private, set the `RULES_REPO_TOKEN`
+PDF artifact. The workflow checks out `agent-reliability-rules` into `.rules` and passes
+`--rules-repo .rules`. If `agent-reliability-rules` is private, set the `RULES_REPO_TOKEN`
 secret to a PAT with read access; for a public pack the default token suffices.

@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """Rulebook consistency gate.
 
-Cross-checks the shipped detection rules (the `trustabl-rules` pack) against the
-rulebook's per-policy rationale docs. This is the rulebook analog of the
-engine's `TestPolicyRules_AllRulesCovered` guard: it fails CI when the book
-drifts from the rules users actually receive.
+Cross-checks the shipped detection rules (the `agent-reliability-rules` pack)
+against the rulebook's per-policy rationale docs. This is the rulebook analog
+of the engine's `TestPolicyRules_AllRulesCovered` guard: it fails CI when the
+book drifts from the rules users actually receive.
 
 It enforces three things:
 
-  1. COVERAGE   — every rule in trustabl-rules has a rationale doc covering it.
+  1. COVERAGE   — every rule in agent-reliability-rules has a rationale doc
+                  covering it.
   2. CONSISTENCY — each doc's front-matter (severity / confidence / scope) matches
                    the rule's YAML. The book may not claim a severity the engine
                    does not ship.
@@ -65,7 +66,7 @@ HINT_ID_RE = re.compile(r"^HINT-\d{4}$")
 
 @dataclass
 class RuleSpec:
-    """One rule as shipped in trustabl-rules (the source of truth)."""
+    """One rule as shipped in agent-reliability-rules (the source of truth)."""
 
     rule_id: str
     severity: str
@@ -103,7 +104,7 @@ class RationaleDoc:
     references: list[str] = field(default_factory=list)
 
 
-# ── loading trustabl-rules ──────────────────────────────────────────────────
+# ── loading agent-reliability-rules ─────────────────────────────────────────
 
 
 def load_rules(rules_repo: Path) -> tuple[dict[str, RuleSpec], list[str]]:
