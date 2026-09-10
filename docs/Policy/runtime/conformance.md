@@ -28,6 +28,11 @@ rules:
     confidence: 0.6
     scope: runtime
     fix_type: config
+  - id: RT-006
+    severity: high
+    confidence: 0.9
+    scope: runtime
+    fix_type: config
 references: [LLM06, LLM08]
 ---
 
@@ -35,9 +40,9 @@ references: [LLM06, LLM08]
 
 **Policy ID:** `runtime_conformance`  
 **File:** `runtime/conformance.yaml`  
-**Rules:** RT-001, RT-002, RT-003, RT-004, RT-005  
-**Severities:** high, medium, high, low, low  
-**Fix types:** config, config, config, code, config  
+**Rules:** RT-001, RT-002, RT-003, RT-004, RT-005, RT-006  
+**Severities:** high, medium, high, low, low, high  
+**Fix types:** config, config, config, code, config, config  
 **References:** LLM06 (Excessive Agency), LLM08 (Vector and Embedding Weaknesses — applied here as trust-in-joins: an inferred join treated as exact)
 
 ---
@@ -168,6 +173,44 @@ before concluding anything. This is review input, not an alarm.
 **What this does not cover.** Which constraint (the finding counts; the
 summary's hit list names them), and windows are per-summary — no
 cross-window accumulation yet.
+
+### RT-006: Action observed under an identity the contract is not bound to (high, 0.9)
+
+**What we detect.** A bound action whose bind status is `binding_mismatch`
+(`action_status_is: binding_mismatch`): the contract was resolved by its
+span-carried hash and carries an identity binding (`trustabl contract bind`
+fused it to one canonical principal and one declared workload), and the
+span's identity keys (`trustabl.principal.id`, `trustabl.workload.id`,
+`trustabl.binding.id`) disagree with that binding. The runtime compares only
+after a key-resolved join; a span with no identity keys is recorded as an
+unverified binding, not as a mismatch, and a contract nobody bound has
+nothing to compare against.
+
+**Why it is flaggable.** The contract's ceilings were compiled for a named
+principal: the DSPM data scope is that person's working set, the tool
+allow-list and hosts were narrowed for that deployment. Run under another
+identity, every one of those ceilings is applied to somebody the compiler
+never considered. That is the identity-fusion failure the sandbox binds
+against at creation time, and OpenShell cannot see it from inside the jail
+because its policy schema has no principal field; the pre-bind check and this
+rule are what make the binding enforceable end to end. LLM06 in its exact
+form: agency exercised under an identity that was never granted it.
+
+**Consequence.** An agent inherits a person's dormant entitlements under a
+contract compiled to prevent exactly that, or a contract bound to a test
+sandbox governs a production one. Either way the contract's evidence chain
+(constraint addresses, signed summaries) is describing the wrong principal.
+
+**Severity/confidence defense.** High/0.9: the comparison is exact, on
+canonical ids the bind step validated, after a hash-resolved join, so a
+mismatch is a measured disagreement between two stated identities rather
+than an inference. Not critical, because the runtime observes and escalates
+and does not block; the enforcement statement governs.
+
+**What this does not cover.** Name-matched actions (no key, no resolved
+binding, already reported as `name_match`); the live `watch` path until it
+accepts the index and store; a workload that stamps the correct keys while
+running as someone else, which is a credential problem the binding cannot see.
 
 ---
 
