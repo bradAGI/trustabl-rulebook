@@ -1,8 +1,8 @@
 # trustabl-rulebook
 
-Index and rationale docs for the [trustabl](https://github.com/trustabl/trustabl)
+Index and rationale docs for the [trustabl](https://github.com/trustabl/agent-reliability-analyzer)
 static analyzer's policy ruleset. Canonical YAML rules live in
-[trustabl/trustabl-rules](https://github.com/trustabl/trustabl-rules) — this
+[trustabl/agent-reliability-rules](https://github.com/trustabl/agent-reliability-rules) — this
 repo links into them and explains the threat model behind each rule.
 
 Coverage spans three agent SDKs plus a protocol-level rule family for the
@@ -38,7 +38,7 @@ Risk score = `severity_weight × confidence × 100`. Weights: `low=0.15`,
 ## Current totals
 
 The engine ships **102 rules across 45 files** in
-[trustabl-rules](https://github.com/trustabl/trustabl-rules). This rulebook
+[agent-reliability-rules](https://github.com/trustabl/agent-reliability-rules). This rulebook
 documents **88 of them across 37 rationale docs** — full rationale coverage of
 the three agent SDKs (Claude Agent SDK, OpenAI Agents SDK, Google ADK). The
 breakdown below counts **shipped rules per family**; the rightmost column flags
@@ -53,7 +53,7 @@ where rationale docs are still missing.
 | **All**                | **66** | **28** | **2**    | **6** | **102** | **88**         |
 
 **Coverage gap (honest):** the `mcp/` pack — 14 rules, `MCP-001`–`MCP-014`, all
-tool-scope — ships in `trustabl-rules` and now appears in
+tool-scope — ships in `agent-reliability-rules` and now appears in
 [POLICY_INDEX.md](POLICY_INDEX.md), but **has no rationale docs yet** (no
 `docs/Policy/mcp/` directory). Until those are authored, `tools/check_rulebook.py`
 fails on the 14 missing-doc errors. Authoring them (threat models + OWASP
@@ -65,27 +65,27 @@ Full breakdown: [POLICY_INDEX.md](POLICY_INDEX.md).
 
 This repo is **documentation only** — it contains no rule YAML and the trustabl
 engine never reads it. The engine resolves rules from
-[trustabl/trustabl-rules](https://github.com/trustabl/trustabl-rules): at scan
+[trustabl/agent-reliability-rules](https://github.com/trustabl/agent-reliability-rules): at scan
 time it clones the configured ref and caches it under
 `os.UserCacheDir()/trustabl/rules/<sha>/`. The rulebook exists so a human can
 look up *why* a rule fires (the threat model and references) without reading the
 engine source.
 
 To run a scan against a different rules pack or pin a version, point the
-**engine** at a `trustabl-rules` repository/ref with `--rules-repo` /
+**engine** at an `agent-reliability-rules` repository/ref with `--rules-repo` /
 `--rules-ref` (or the `TRUSTABL_RULES_REPO` env var); `--no-rules-update` uses
 the local cache only. See the trustabl engine README for the full flag list.
 
 ## Contributing a rule
 
-A rule spans three repos. The YAML lives in `trustabl-rules`; the rationale
+A rule spans three repos. The YAML lives in `agent-reliability-rules`; the rationale
 doc lives here; the test mirror lives in the engine.
 
 1. Read the rule-authoring contract in
-   [trustabl-rules/CLAUDE.md](https://github.com/trustabl/trustabl-rules/blob/main/CLAUDE.md)
+   [agent-reliability-rules/CLAUDE.md](https://github.com/trustabl/agent-reliability-rules/blob/main/CLAUDE.md)
    — required fields, per-scope `applies_to` values, ID conventions, severity
    guidance.
-2. Add the YAML rule to `trustabl-rules` under `<sdk>/<topic>.yaml`.
+2. Add the YAML rule to `agent-reliability-rules` under `<sdk>/<topic>.yaml`.
 3. Copy the template from
    [docs/policy-rationale-doc-template-guide.md](docs/policy-rationale-doc-template-guide.md),
    fill every section, and add the paired rationale **here** at
@@ -98,8 +98,8 @@ doc lives here; the test mirror lives in the engine.
 
 ## Companion repos
 
-- [trustabl/trustabl-rules](https://github.com/trustabl/trustabl-rules) —
+- [trustabl/agent-reliability-rules](https://github.com/trustabl/agent-reliability-rules) —
   canonical YAML rules pack. The engine loads this at runtime; rule edits
   land here.
-- [trustabl/trustabl](https://github.com/trustabl/trustabl) — the analyzer
+- [trustabl/agent-reliability-analyzer](https://github.com/trustabl/agent-reliability-analyzer) — the analyzer
   binary that consumes the rules pack.
