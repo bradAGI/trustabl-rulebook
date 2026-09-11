@@ -19,13 +19,18 @@ rules:
     scope: repo
     fix_type: config
   - id: CSDK-205
-    severity: high
-    confidence: 0.8
+    severity: medium
+    confidence: 0.7
     scope: repo
     fix_type: config
   - id: CSDK-206
     severity: low
     confidence: 0.6
+    scope: repo
+    fix_type: config
+  - id: CSDK-207
+    severity: high
+    confidence: 0.8
     scope: repo
     fix_type: config
 references: [LLM02, LLM06, LLM10]
@@ -35,9 +40,9 @@ references: [LLM02, LLM06, LLM10]
 
 **Policy ID:** `claude_sdk_repo`  
 **File:** `claude_sdk/repo.yaml`  
-**Rules:** CSDK-201, CSDK-202, CSDK-204, CSDK-205, CSDK-206  
-**Severities:** critical, critical, critical, high, low  
-**Fix types:** config, config, config, config, config  
+**Rules:** CSDK-201, CSDK-202, CSDK-204, CSDK-205, CSDK-206, CSDK-207  
+**Severities:** critical, critical, critical, medium, low, high  
+**Fix types:** config, config, config, config, config, config  
 **References:** LLM02 (Sensitive Information Disclosure), LLM06 (Excessive Agency), LLM10 (Unbounded Consumption)
 
 ---
@@ -45,7 +50,7 @@ references: [LLM02, LLM06, LLM10]
 ## What this policy covers
 
 Repo-scope rules for project-wide Claude Agent SDK session configuration
-posture, in three families.
+posture, in four families.
 
 Approval gating: the mode declared in `.claude/settings.json` /
 `settings.local.json` (predicate `repo_claude_default_mode_is`) and the mode
@@ -56,9 +61,16 @@ the respective `bypassPermissions` value is present.
 Standing permission grants: the `permissions.allow` list in the same settings
 files. CSDK-204 fires when `Bash` is pre-approved with no command pattern
 narrowing it (predicate `repo_claude_permission_allows_unrestricted_shell`);
-CSDK-205 fires when a side-effecting tool — `Write`, `Edit`, `MultiEdit`,
-`NotebookEdit`, `WebFetch`, or `WebSearch` — appears in `permissions.allow`
+CSDK-207 fires when a side-effecting tool, `Write`, `Edit`, `MultiEdit`,
+`NotebookEdit`, `WebFetch`, or `WebSearch`, appears in `permissions.allow`
 at any pattern (predicate `repo_claude_permission_allows_tool`).
+
+Tool-surface bounding: whether a session that auto-approves edits
+(`ClaudeAgentOptions(permission_mode="acceptEdits")`, predicate
+`repo_claude_options_permission_mode_is`) has any `disallowed_tools` deny-list
+anywhere in the project (predicate
+`repo_claude_options_disallowed_tools_missing`). CSDK-205 fires once per scan
+when the mode is set and no construction names a deny-list.
 
 Execution bounding: whether any `ClaudeAgentOptions(...)` construction in the
 project sets an explicit `max_turns` (predicate
@@ -281,7 +293,120 @@ likewise a bare grant living in user-level `~/.claude/settings.json` or a
 managed policy file outside the repo, or sessions launched with
 `--dangerously-skip-permissions`, are outside a repo scan entirely.
 
-### CSDK-205 — Project settings pre-approve side-effecting tools (Severity: high, Confidence: 0.8, Fix type: config)
+### CSDK-205: Claude Agent SDK session auto-approves edits with no tool deny-list (Severity: medium, Confidence: 0.7, Fix type: config)
+
+**What we detect:**
+At least one `ClaudeAgentOptions(...)` construction in the project sets
+`permission_mode="acceptEdits"` (predicate
+`repo_claude_options_permission_mode_is: [acceptEdits]`), and no
+`ClaudeAgentOptions(...)` construction anywhere in the project passes
+`disallowed_tools` (predicate `repo_claude_options_disallowed_tools_missing:
+true`). The second predicate is an absence check across every construction:
+one options object that names a deny-list silences the rule for the whole
+repository. Constructions built with `**` unpacking are opaque and skipped,
+and a construction that sets `disallowed_tools=[]` or `disallowed_tools=None`
+counts as set. The rule fires once per scan.
+
+**Why it is flaggable:**
+The SDK's `allowed_tools` is an auto-approval list, not a restriction. A tool
+that is not listed still runs; it only falls back to the session's permission
+mode for its approval. With `acceptEdits` that mode approves every file write
+and edit without a prompt, so the only thing bounding the rest of the tool
+surface (shell execution, web retrieval, MCP tools) is `disallowed_tools`.
+When no construction sets it, the session has removed the human checkpoint on
+edits and declared no boundary at all on the tools that reach further.
+
+**Real-world consequence:**
+An instruction planted in a file the agent reads, or in a tool result, chains
+an auto-approved edit with something the operator never meant to allow. A
+README that tells the agent to fetch and run a setup script is the common
+shape: the edit lands without a prompt, the shell tool is not denied, and the
+only barrier left is the operator noticing before the command runs. The blast
+radius is whatever the session's tools can reach, which for an SDK session
+with no deny-list is every tool the model can see.
+
+**Why severity is medium and not high:**
+`acceptEdits` removes the prompt for edits only. Shell and network tools still
+prompt under it by default, so the missing deny-list is a missing boundary,
+not a bypassed one; the bypassed case is `bypassPermissions`, which CSDK-202
+rates critical. It is not low because the gap applies to every session the
+code constructs, not to one invocation, and because closing it is a one-line
+configuration change with no functional cost.
+
+**Fix type (config):**
+Pass `disallowed_tools=[...]` to `ClaudeAgentOptions(...)`, naming shell
+execution and any tool that reaches the network or credentials. Keep
+`acceptEdits` if auto-approving edits is intentional, but pair it with the
+deny-list; or drop back to `permission_mode="default"` so edits prompt too.
+
+**Confidence 0.7:**
+Both facts are read from constructor keyword arguments, so the fire condition
+is not a heuristic. The number stays below 0.8 because the absence check has
+blind spots that cut both ways: a deny applied outside the constructor (a
+`permissions.deny` block in a settings file the session loads through
+`setting_sources`, or a wrapper that adds the list before the call) is
+invisible, so the rule fires on a session that is in fact bounded; and an
+options object built from `**config` is skipped rather than counted, so a
+project whose only options are opaque never fires. `disallowed_tools=[]` also
+silences the rule while denying nothing, the same tri-state limitation
+CSDK-206 has for `max_turns=None`.
+
+### CSDK-206 — Claude Agent SDK session sets no explicit max_turns limit (Severity: low, Confidence: 0.6, Fix type: config)
+
+> **Renumbered from CSDK-204** when the fixture/production id collision was
+> resolved (2026-08-31): the id CSDK-204 now names the unrestricted-shell rule
+> above, and the max_turns rule shipped here took CSDK-206. Scan reports
+> produced before the reconciliation attribute this finding to CSDK-204.
+
+**What we detect:**
+Every non-opaque `ClaudeAgentOptions(...)` construction in the project sets no
+`max_turns` (predicate `repo_claude_options_max_turns_missing`). A
+construction built with `**` unpacking (`Opaque: true`) is skipped — its kwarg
+set is not statically knowable, so its silence on `max_turns` is not evidence
+of a missing cap. The rule fires once per scan, when at least one concrete
+construction exists and none of them set the kwarg; a project with no
+`ClaudeAgentOptions` construction at all never fires, and a single
+construction that sets an explicit cap silences the rule for the repo.
+
+**Why it is flaggable:**
+With no explicit `max_turns`, the session runs to whatever ceiling the
+`claude-agent-sdk` runtime applies by default rather than to a bound sized for
+the task. This is the LLM10 (Unbounded Consumption) mechanism: a model that
+loops or oscillates — retrying a failing tool, re-reading the same file,
+ping-ponging between two steps — keeps consuming turns, tokens, and tool side
+effects until the implicit ceiling is reached.
+
+**Real-world consequence:**
+An unattended or server-side session with no turn cap can run substantially
+longer, and touch substantially more tool side effects, than the task
+warrants before the SDK's own default intervenes — and that default is an
+implementation detail of the SDK release in use, not a value declared in the
+project. A stuck run also fails silently rather than surfacing as a clean,
+observable stop at a bound the developer chose.
+
+**Why severity is low and not higher:**
+A runtime-level default ceiling exists — the SDK does not let a session run
+forever — so this is not an unbounded-loop finding, it is a missing
+*explicit, task-sized* bound. That places it in the same category as LC-102 /
+LC-111 (LangChain `max_iterations`) and CREW-110 (CrewAI `max_iter`): real but
+modest risk, since a generic framework ceiling already bounds the worst case.
+
+**Fix type — config:**
+Pass `max_turns=` to `ClaudeAgentOptions(...)`, sized to the work the session
+actually does. It is a constructor argument change, not a tool-logic change.
+
+**Confidence 0.6:**
+Lower than the other rules in this pack because the finding is about an
+omission rather than a dangerous value present in code, so it carries a
+higher false-positive surface: an options object built but never used to
+drive a real session, a cap enforced by a wrapper or retry harness outside
+the constructor call itself, or a genuinely short-lived session where no cap
+is needed in practice. False negatives include a `max_turns` value passed via
+a variable the scanner cannot resolve to a literal, and — see the coverage
+gap below — any TypeScript project, since discovery of
+`ClaudeAgentOptions(...)` is Python-only today.
+
+### CSDK-207 — Project settings pre-approve side-effecting tools (Severity: high, Confidence: 0.8, Fix type: config)
 
 **What we detect:**
 A `.claude/settings.json` (or `settings.local.json`) anywhere in the repo whose
@@ -351,61 +476,6 @@ reachable through other spellings — a patterned `Bash` grant running `curl`
 or `tee`, or an MCP server's write/fetch tools (an `mcp__server__tool` entry
 parses to tool name `MCP`, which is not in this rule's list).
 
-### CSDK-206 — Claude Agent SDK session sets no explicit max_turns limit (Severity: low, Confidence: 0.6, Fix type: config)
-
-> **Renumbered from CSDK-204** when the fixture/production id collision was
-> resolved (2026-08-31): the id CSDK-204 now names the unrestricted-shell rule
-> above, and the max_turns rule shipped here took CSDK-206. Scan reports
-> produced before the reconciliation attribute this finding to CSDK-204.
-
-**What we detect:**
-Every non-opaque `ClaudeAgentOptions(...)` construction in the project sets no
-`max_turns` (predicate `repo_claude_options_max_turns_missing`). A
-construction built with `**` unpacking (`Opaque: true`) is skipped — its kwarg
-set is not statically knowable, so its silence on `max_turns` is not evidence
-of a missing cap. The rule fires once per scan, when at least one concrete
-construction exists and none of them set the kwarg; a project with no
-`ClaudeAgentOptions` construction at all never fires, and a single
-construction that sets an explicit cap silences the rule for the repo.
-
-**Why it is flaggable:**
-With no explicit `max_turns`, the session runs to whatever ceiling the
-`claude-agent-sdk` runtime applies by default rather than to a bound sized for
-the task. This is the LLM10 (Unbounded Consumption) mechanism: a model that
-loops or oscillates — retrying a failing tool, re-reading the same file,
-ping-ponging between two steps — keeps consuming turns, tokens, and tool side
-effects until the implicit ceiling is reached.
-
-**Real-world consequence:**
-An unattended or server-side session with no turn cap can run substantially
-longer, and touch substantially more tool side effects, than the task
-warrants before the SDK's own default intervenes — and that default is an
-implementation detail of the SDK release in use, not a value declared in the
-project. A stuck run also fails silently rather than surfacing as a clean,
-observable stop at a bound the developer chose.
-
-**Why severity is low and not higher:**
-A runtime-level default ceiling exists — the SDK does not let a session run
-forever — so this is not an unbounded-loop finding, it is a missing
-*explicit, task-sized* bound. That places it in the same category as LC-102 /
-LC-111 (LangChain `max_iterations`) and CREW-110 (CrewAI `max_iter`): real but
-modest risk, since a generic framework ceiling already bounds the worst case.
-
-**Fix type — config:**
-Pass `max_turns=` to `ClaudeAgentOptions(...)`, sized to the work the session
-actually does. It is a constructor argument change, not a tool-logic change.
-
-**Confidence 0.6:**
-Lower than the other rules in this pack because the finding is about an
-omission rather than a dangerous value present in code, so it carries a
-higher false-positive surface: an options object built but never used to
-drive a real session, a cap enforced by a wrapper or retry harness outside
-the constructor call itself, or a genuinely short-lived session where no cap
-is needed in practice. False negatives include a `max_turns` value passed via
-a variable the scanner cannot resolve to a literal, and — see the coverage
-gap below — any TypeScript project, since discovery of
-`ClaudeAgentOptions(...)` is Python-only today.
-
 ---
 
 ## What this policy does not cover
@@ -414,7 +484,7 @@ gap below — any TypeScript project, since discovery of
   environment lookup, or config file the scanner cannot resolve to a literal.
 - `acceptEdits` mode — auto-approving file edits via the *mode* is a narrower
   risk these rules deliberately do not flag, since shell and network actions
-  still prompt. (Pre-approving the edit *tools* by name is CSDK-205's job.)
+  still prompt. (Pre-approving the edit *tools* by name is CSDK-207's job.)
 - User-level and machine-level configuration outside the repository —
   `~/.claude/settings.json`, managed policy files, and sessions launched with
   `--dangerously-skip-permissions` — none of which a repo scan can see.
@@ -423,7 +493,7 @@ gap below — any TypeScript project, since discovery of
   and evade CSDK-204, because judging which narrowings suffice is not
   mechanically decidable. The `PreToolUse`-hook recommendation exists
   precisely because allowlist patterns alone cannot close this.
-- CSDK-205 is pattern-blind by design: a scoped grant
+- CSDK-207 is pattern-blind by design: a scoped grant
   (`"Write(src/generated/**)"`, a domain-limited `WebFetch`) still fires —
   a known, deliberate false positive relative to blast radius. Only removal
   or `ask` silences it; the pattern-aware predicate that could tier these
@@ -435,7 +505,7 @@ gap below — any TypeScript project, since discovery of
   it unflagged rather than flagging half the tool surface.
 - MCP-mediated capability: an `mcp__server__tool` entry in
   `permissions.allow` parses to tool name `MCP` and matches neither CSDK-204
-  nor CSDK-205, however powerful the underlying server tool is.
+  nor CSDK-207, however powerful the underlying server tool is.
 - `permissions.deny` / `permissions.ask` misconfigurations, `hooks`, and
   `additionalDirectories` — adjacent settings surfaces with their own failure
   modes, not covered by these predicates.
@@ -456,6 +526,12 @@ gap below — any TypeScript project, since discovery of
   was not independently verified for this rationale doc, unlike the
   documented CrewAI default of 20 (CREW-110) or LangChain's default of 15
   (LC-102).
+- CSDK-205 reads only what a `ClaudeAgentOptions(...)` call spells out. A
+  deny-list applied through a settings file the session loads via
+  `setting_sources`, or added by a wrapper before the constructor runs, does
+  not silence it, and an options object built with `**` unpacking is skipped
+  rather than counted. It never consults `allowed_tools`, because that list
+  restricts nothing.
 
 ---
 
