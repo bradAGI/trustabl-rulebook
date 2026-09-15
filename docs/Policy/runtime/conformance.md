@@ -328,11 +328,13 @@ with a revoked or forged ticket.
 principal being who the directory says they are, which is the SCIM endpoint's
 job (the change feed is what revokes); a valid ticket presented by a workload
 that is not the one it was issued to, when the workload id was fused unattested
-(the summary's `tickets_unattested` count names how many bound that way, and
+(the summary's `tickets_unattested` count names how many verified tickets
+fused only the name, on actions of any status, and
 `tickets_contract_unchecked` how many verified against the binding alone
 because no join index gave the runtime a live hash to compare the policyhash
 against); pruned history, since a replayed trace older than the store's
-retention window reads its ticket as `unknown_id` rather than `expired`.
+retention window finds no ticket and reads `unknown_id`, where inside the
+window it read the verdict it gave when live.
 
 ---
 
