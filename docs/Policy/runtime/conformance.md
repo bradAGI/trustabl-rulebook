@@ -239,9 +239,10 @@ after a hash miss, and whether or not any ticket flag was given: a deployment
 that drops its binding line does not escape the requirement by that omission.
 The summary counts the failure from the failure the binder recorded, not from
 the status, so an action whose off-contract deny stood is still named in
-`ticket_failures`, and the guard carries it as its own action with that deny
-and the runtime's join method. This rule matches on the status alone, so it
-fires for that action too, beside RT-001.
+`ticket_failures`, citing the binding constraint the ticket failed (the
+action's own verdict keeps citing the allow-list), and the guard carries it as
+its own action with that deny and the runtime's join method. This rule matches
+on the status alone, so it fires for that action too, beside RT-001.
 
 **Why it is flaggable.** The binding's span keys (`trustabl.principal.id`,
 `trustabl.workload.id`, `trustabl.binding.id`) are claims a workload stamps on
@@ -314,12 +315,14 @@ re-issued or a live incident.
 against the evidence public key, the resolved contract's policyhash, the
 binding and an append-only revocation list, so a failure is a measured
 disagreement with signed facts, and a revoked or forged ticket is exactly the
-condition the ticket exists to catch. 0.9 rather than 1.0 because two of the
+condition the ticket exists to catch. 0.9 rather than 1.0 because some of the
 reasons describe the verifier's own situation rather than the workload's: a
-store the runtime cannot read and a mangled span end time fail closed by
-design, and an operator will fix those on the runtime host, not the
-deployment. The fix text is keyed on the reason so the two cases are not
-confused.
+store the runtime cannot read fails closed by design and is fixed on the
+runtime host, a mangled span end time or stamp (`malformed`) is fixed in the
+deployment's instrumentation, and `unknown_id` after a prune's retention
+window is a replay artefact rather than a live incident. The fix text has a
+branch for every reason the runtime emits so those cases are not confused
+with a revoked or forged ticket.
 
 **What this does not cover.** A ticket that was never presented (RT-007); the
 principal being who the directory says they are, which is the SCIM endpoint's
