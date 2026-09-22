@@ -287,8 +287,9 @@ and names the first that failed: `unknown_id` (not in the ticket store),
 the deterministic demo key on an enforcement path), `policyhash_mismatch` and
 `binding_mismatch` (fused to another contract version, principal, binding or
 workload), `not_yet_valid` and `expired` (judged at the span's end time, or
-`--now` for spans that carry none), `revoked` (by the operator or the
-directory change feed), `store_unreadable` (a ticket store or revocation list
+`--now` for spans that carry none), `revoked` (by the operator, or by the
+directory change feed that `contract directory sync` diffs from the Console's
+directory snapshots), `store_unreadable` (a ticket store or revocation list
 the runtime could not read) and `malformed` (a span end time or a stamp that
 is not a ticket id). As with RT-007 the failure is recorded beside a stronger
 verdict rather than replacing it, and this rule fires for that action too.
@@ -325,8 +326,9 @@ branch for every reason the runtime emits so those cases are not confused
 with a revoked or forged ticket.
 
 **What this does not cover.** A ticket that was never presented (RT-007); the
-principal being who the directory says they are, which is the SCIM endpoint's
-job (the change feed is what revokes); a valid ticket presented by a workload
+principal being who the directory says they are, which is the directory's job:
+the Console keeps it from the IdP's SCIM push through Ory Polis, and the
+change feed the engine diffs from its snapshots is what revokes; a valid ticket presented by a workload
 that is not the one it was issued to, when the workload id was fused unattested
 (the summary's `tickets_unattested` count names how many verified tickets
 fused only the name, on actions of any status, and
