@@ -8,7 +8,10 @@
 # default; tectonic is the easiest to install for CI — override with
 # `make book PDF_ENGINE=tectonic`).
 
-RULES_REPO ?= ../trustabl-rules
+# $TRUSTABL_RULES_REPO is the documented way to point the tools at a pack that
+# is not a sibling checkout. Make passes --rules-repo explicitly, so without
+# this the variable is silently ignored for every target.
+RULES_REPO ?= $(or $(TRUSTABL_RULES_REPO),../trustabl-rules)
 PDF_ENGINE ?= xelatex
 # `python` is not a thing on a stock macOS (and need not exist anywhere);
 # the tools are python3. Override if your interpreter lives elsewhere.
