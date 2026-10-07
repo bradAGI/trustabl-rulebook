@@ -1,9 +1,11 @@
 # Rulebook tooling
 
-Both tools read the shipped pack from a sibling `trustabl-rules` checkout
+All three tools read the shipped pack from a sibling `trustabl-rules` checkout
 (override with `--rules-repo` or `$TRUSTABL_RULES_REPO`) and share one rule
 loader (`check_rulebook.load_rules`), so they can never disagree about what
-ships. Requires python 3.11+ and pyyaml.
+ships. Requires python 3.9+ and pyyaml — 3.9 because that is the interpreter a
+stock macOS provides, and the tools are deliberately kept runnable on it (see
+the `write_bytes` note in `gen_index.py`). CI pins 3.12.
 
 ## `build_book.py` + `make book` — PDF build
 
@@ -40,23 +42,24 @@ confidence × 100 using the engine's weights (critical 1.0 / high 0.7 /
 medium 0.4 / low 0.15 / info 0.05), one decimal, round-half-up.
 
 ```bash
-python tools/gen_index.py            # write the 4 index files
+python tools/gen_index.py            # write the master index + one per family
 python tools/gen_index.py --check    # CI: exit 1 if regeneration would change anything
 ```
 
-Wire `--check` into CI next to the consistency gate so a rule added to the pack
+`--check` runs in CI next to the consistency gate, so a rule added to the pack
 without regenerating the index fails the build.
 
 ## `check_rulebook.py` — consistency gate
 
-Cross-checks the shipped detection rules (the `trustabl-rules` pack) against the
-rulebook's rationale docs. It is the rulebook analog of the engine's
+Cross-checks the shipped detection rules (the `agent-reliability-rules` pack)
+against the rulebook's rationale docs. It is the rulebook analog of the engine's
 `TestPolicyRules_AllRulesCovered` guard: it fails when the book drifts from the
 rules users actually receive, so a polished PDF can never quietly go stale.
 
 ### What it enforces
 
-1. **Coverage** — every rule in `trustabl-rules` has a rationale doc covering it.
+1. **Coverage** — every rule in `agent-reliability-rules` has a rationale doc
+   covering it.
 2. **Consistency** — each doc's front-matter `severity` / `confidence` / `scope`
    matches the rule's YAML.
 3. **Placement** — a rule is documented in the chapter (`category`/`topic`) where
@@ -68,7 +71,7 @@ It reads the YAML front-matter required on every `docs/Policy/<category>/<topic>
 ### Usage
 
 ```bash
-# Requires: python 3.11+, pyyaml. A sibling trustabl-rules checkout.
+# Requires: python 3.9+, pyyaml. A sibling trustabl-rules checkout.
 python tools/check_rulebook.py                       # ../trustabl-rules by default
 python tools/check_rulebook.py --rules-repo /path/to/trustabl-rules
 python tools/check_rulebook.py --strict              # docs without front-matter are errors, not warnings
@@ -78,17 +81,17 @@ python tools/check_rulebook.py --strict              # docs without front-matter
 book is consistent with the pack; `1` = at least one error; `2` = the rules repo
 was not found.
 
-### Migration status
+### Front-matter
 
-Docs without front-matter are reported as **warnings** (not errors) so the
-migration can land incrementally. Once every doc carries front-matter, switch CI
-to `--strict` to make missing front-matter a hard failure.
+Every rationale doc carries front-matter, and CI runs the gate with `--strict`,
+so a doc without it is a hard failure. The default (warn, not error) is kept for
+local runs on a work-in-progress doc.
 
 ### CI
 
 The gate runs automatically via [`.github/workflows/rulebook.yml`](../.github/workflows/rulebook.yml):
 a `consistency` job (this gate `--strict`, `gen_index.py --check`, and a book
 assemble smoke test) gates every PR, and a `build-pdf` job renders and uploads the
-PDF artifact. The workflow checks out `trustabl-rules` into `.rules` and passes
-`--rules-repo .rules`. If `trustabl-rules` is private, set the `RULES_REPO_TOKEN`
+PDF artifact. The workflow checks out `agent-reliability-rules` into `.rules` and passes
+`--rules-repo .rules`. If `agent-reliability-rules` is private, set the `RULES_REPO_TOKEN`
 secret to a PAT with read access; for a public pack the default token suffices.
