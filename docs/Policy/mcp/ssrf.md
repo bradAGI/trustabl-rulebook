@@ -159,6 +159,8 @@ instance's role credentials, delivered into the conversation. The attacker never
 needed access to the VPC; they needed the server to make one request on their
 behalf, from a network position they do not have and the server does.
 
+**Real-world consequence:** a stale, forgotten-but-still-live internal system — one that was supposed to be decommissioned but never was, with credentials for it sitting in an accessible file — is a plausible SSRF target: nobody is watching it, so a steered request against it goes unnoticed until data is already gone. The consequence isn't always data theft, either. In one publicly-relevant case, an attacker used an internal foothold to lock a company and its customers out of a cloud-hosted system entirely — no data was actually accessed (so it wasn't a reportable breach), but the business couldn't operate until a ransom was paid. An SSRF-reachable internal endpoint is a plausible entry point for that class of availability attack, not only for credential exfiltration.
+
 ### MCP-013 — TypeScript MCP tool fetches a caller-controlled URL (SSRF) (Severity: high, Confidence: 0.6, Fix type: code)
 
 **What we detect:**  
@@ -201,6 +203,8 @@ path in. `fetch` follows redirects by default, so a handler that allow-lists the
 host it is given still reaches the metadata endpoint if the allowed host answers
 with a 302 pointing at it. The check ran, passed, and protected nothing —
 `redirect: "manual"` is what closes it.
+
+**Real-world consequence:** same consequence class as MCP-008 — stale internal systems and availability/ransom attacks are language-agnostic outcomes of a successful SSRF, not specific to the Python SDK.
 
 ---
 
